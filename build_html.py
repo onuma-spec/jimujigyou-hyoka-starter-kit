@@ -97,9 +97,14 @@ LABELS = {
     'show_emeta':        True,   # 事業番号・担当課
     'show_tags':         True,   # タグ行（法定根拠／行政評価／提供形態）
     'show_desc':         True,   # 目的・事業内容
-    'show_budget':       True,   # 決算額・人件費チェック（セット）
+    'show_budget':       True,   # 決算額・人件費表示（セット）
     'show_outcome':      True,   # 成果
     'show_impact':       True,   # 廃止した場合の影響
+    'enable_voting':      True,   # 投票機能（Supabase連携）を使うか。Falseの場合、投票ボタン・
+    # みんなの評価の取得・投票結果CSVダウンロードを無効化し、フェーズ④のSupabase設定（新規プロジェクト
+    # 作成・SQL実行）自体が不要になる。個人のLocalStorage評価・全事務事業データCSVダウンロードは
+    # Falseでも引き続き機能する（2026-08-04追加・朝来市実地テストで発覚：フェーズ④未着手のままだと
+    # プレースホルダーURLへの接続が失敗し「データの取得に失敗しました」が表示される問題への対応）
 }
 LABELS_JSON = json.dumps(LABELS, ensure_ascii=False)
 
@@ -384,7 +389,7 @@ function load() {
   try { ratings = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e) {}
   showRenewalNoticeIfNeeded();
   render('map');
-  loadPeopleData(); // ドリルダウンで「みんなの評価」を見せるため、投票前でも起動時に取得する
+  if (LABELS.enable_voting !== false) loadPeopleData(); // ドリルダウンで「みんなの評価」を見せるため、投票前でも起動時に取得する
 }
 
 // 旧v2利用者向け：評価内容が引き継がれないことの一度きりの案内（v2の保存キーが残っている＝過去に利用した形跡がある場合のみ表示）
@@ -902,19 +907,19 @@ function renderSummary(app) {
     </div>
     <div class="card">
       <h2 style="font-size:1rem;font-weight:700;margin-bottom:10px">${esc(LABELS.summary_title)}</h2>
-      <div class="no-print" style="margin-bottom:12px">
+      ${LABELS.enable_voting !== false ? `<div class="no-print" style="margin-bottom:12px">
         <button id="submit-btn" class="btn btn-p btn-sm" onclick="submitToSupabase()">📤 投票する</button>
         <span style="font-size:.8rem;color:#6b7280;margin-left:10px">投票すると、自分の評価がみんなの評価に反映されます。<br>送信されるのは事業番号・評価結果（続行/廃止/見直し）・送信日時のみです。個人情報は一切収集しません。<br>追加で評価した事業がある場合は、再度このボタンから投票できます（同じ事業を重複して送信することはありません）。<br>実際の収集情報は下の📥 生データCSVから閲覧できます。</span>
-      </div>
+      </div>` : ''}
       <div class="no-print" style="margin-bottom:12px;padding-top:12px;border-top:1px solid #eef0f2">
         <button class="btn btn-o btn-sm" onclick="downloadAllEventsCsv()">📥 全事務事業データをCSVでダウンロード（${EVENTS.length}件）</button>
         <span style="font-size:.8rem;color:#6b7280;margin-left:10px">評価対象の全事務事業を、目的・事業内容、成果、廃止した場合の影響も含めて一括ダウンロードできます。行政による公表はPDFのみのため、表計算ソフト等でご自身の分析にご活用ください。</span>
       </div>
-      <div id="vote-section"><p style="color:#6b7280;font-size:.85rem">読み込み中...</p></div>
+      ${LABELS.enable_voting !== false ? `<div id="vote-section"><p style="color:#6b7280;font-size:.85rem">読み込み中...</p></div>` : ''}
     </div>
     <button class="btn btn-o btn-full no-print" onclick="render('map')">← マップに戻る</button>
     <button class="btn btn-o btn-full no-print" onclick="if(confirm('評価をすべてリセットしますか？')){localStorage.removeItem(LS_KEY);localStorage.removeItem(SUBMITTED_KEY);ratings={};render('map')}">🗑 自分の評価をリセット</button>`;
-  loadPeopleData();
+  if (LABELS.enable_voting !== false) loadPeopleData();
 }
 
 function getSubmittedNos() {
@@ -925,6 +930,7 @@ function getSubmittedNos() {
 }
 
 async function submitToSupabase() {
+  if (LABELS.enable_voting === false) return;
   const already = new Set(getSubmittedNos());
   const rows = Object.entries(ratings)
     .filter(([no, r]) => r && !already.has(no))
@@ -946,6 +952,7 @@ async function submitToSupabase() {
 }
 
 async function loadPeopleData() {
+  if (LABELS.enable_voting === false) return;
   const { data, error } = await sb
     .from('ratings').select('event_no,rating').eq('municipality_id', MUNICIPALITY_ID);
   if (error) {
