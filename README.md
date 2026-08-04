@@ -46,9 +46,7 @@
 
 ## Contributing
 
-新しい自治体版を作った場合は、ぜひ [Issue](../../issues) で教えてください。[本体ツール](https://github.com/onuma-spec/jimujigyou-hyoka)の導入自治体一覧に追加できる場合があります。
-
-バグ報告・ドキュメント改善の提案も歓迎します。
+バグ報告・ドキュメント改善の提案は[Issue](../../issues)で歓迎します。
 
 ---
 
