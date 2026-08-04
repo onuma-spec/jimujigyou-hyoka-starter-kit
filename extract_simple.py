@@ -23,9 +23,10 @@ import openpyxl
 from pdfminer.high_level import extract_pages
 from pdfminer.layout import LTTextBox, LTTextLine, LTChar, LTAnno
 
-EXCEL_PATH = r"C:\Users\onuma\Desktop\AIの作業場\小さな政府\07_事務事業評価\01_元データ\R6kitamoto_itiran.xlsx"
-PDF_PATH   = r"C:\Users\onuma\Desktop\AIの作業場\小さな政府\07_事務事業評価\01_元データ\R6kitamoto_sheet.pdf"
-OUT_CSV    = r"C:\Users\onuma\Desktop\AIの作業場\小さな政府\07_事務事業評価\03_パッチ済みデータ\kitamoto_master_v2.csv"
+# 以下3つのパスは自治体ごとの作業フォルダに合わせて変更する
+EXCEL_PATH = r"元データ.xlsx"
+PDF_PATH   = r"元データ.pdf"
+OUT_CSV    = r"master_data.csv"
 
 
 # ── Excel 読み込み ─────────────────────────────────────────────────────────
@@ -359,7 +360,7 @@ def main():
         out.append(f"  output_name={r['output_name']!r}")
         out.append('')
 
-    with open(r"C:\Users\onuma\AppData\Local\Temp\claude\c--Users-onuma-Desktop-AI----\045ab420-5ab9-49ff-b3c3-62bea8343a00\scratchpad\extract_v2_report.txt", 'w', encoding='utf-8') as f:
+    with open('extract_report.txt', 'w', encoding='utf-8') as f:
         f.write('\n'.join(out))
 
 

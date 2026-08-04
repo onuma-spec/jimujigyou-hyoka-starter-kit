@@ -15,8 +15,8 @@ build_kitamoto_v2.py をベースに、UXを3画面（①全体像マップ ②�
 """
 import csv, json, os
 
-BASE = r"C:\Users\onuma\Desktop\AIの作業場\小さな政府\07_事務事業評価"
-OUT_DIR = os.path.join(BASE, "04_本番HTML生成")
+BASE = r"."  # 自治体ごとの作業フォルダに合わせて変更する
+OUT_DIR = BASE
 
 # ── 支援対象×提供形態 13分類（AI分類パイロット結果＋G48件の個別レビュー＋分類ルール改良の補正）─────
 # classified2_all.json の分類そのもの（旧コード）は変更せず、表示用のコードだけ新体系（1〜13）に変換する。

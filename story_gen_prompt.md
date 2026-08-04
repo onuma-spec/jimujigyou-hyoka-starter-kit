@@ -115,7 +115,7 @@ import csv, json, sys, time
 from pathlib import Path
 
 # ===== 自治体ごとに変更する =====
-CSV_PATH   = r'C:\Users\onuma\Desktop\AIの作業場\小さな政府\07_事務事業評価\加工データ\seiro_master.csv'
+CSV_PATH   = r'master_data.csv'  # 自治体ごとの作業フォルダ内のマスターCSVへのパスに変更する
 POPULATION = 14000  # 住民人口（story_p1生成時のみ使用）
 MODEL      = 'claude-haiku-4-5-20251001'
 # ================================
@@ -226,7 +226,7 @@ if __name__ == '__main__':
 3. 第1パス（story_p1 生成）：スキップ条件を `story_p1`、出力を `story_p1` に変更して実行
 4. 第2パス（story_p2 生成）：デフォルト設定のまま実行
    ```
-   python "C:\Users\onuma\Desktop\AIの作業場\小さな政府\07_事務事業評価\スクリプト\gen_story.py"
+   python gen_story.py
    ```
    300件を超える規模の自治体では、OAuthトークンの途中失効を避けるため`ANTHROPIC_API_KEY`環境変数の使用を推奨（上記「概要」節の注意参照）。
 5. エラー行は空のままなので、再実行すれば自動的に再生成される

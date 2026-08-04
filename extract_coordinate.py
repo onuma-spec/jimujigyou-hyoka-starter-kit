@@ -23,14 +23,15 @@ import urllib.request
 from pdfminer.high_level import extract_text
 from pdfminer.pdfpage import PDFPage
 
-BASE = r"C:\Users\onuma\Desktop\AIの作業場\小さな政府\07_事務事業評価"
-sys.path.insert(0, fr"{BASE}\02_抽出スクリプト")
+# coord_extract_utils.py は同梱キットではこのスクリプトと同じフォルダにある
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from coord_extract_utils import (
     get_page_chars, find_stamps, find_label_runs, find_section_bound,
     extract_by_label_column,
 )
-PDFDIR = fr"{BASE}\01_元データ\tondabayashi_pdfs"
-OUTCSV = fr"{BASE}\03_パッチ済みデータ\tondabayashi_master_v2.csv"
+# 以下2つのパスは自治体ごとの作業フォルダに合わせて変更する
+PDFDIR = r"元データ"
+OUTCSV = r"master_data.csv"
 
 PDF_SOURCES = [
     ("https://www.city.tondabayashi.lg.jp/uploaded/attachment/111408.pdf", "市長公室"),
