@@ -12,47 +12,13 @@
 
 以下の①〜④は、Claude Code等のAIコーディング支援に本リポジトリ一式を渡し、`スターターキット.md`・`fixed_prompt.md`を指示書として読み込ませて実行してもらう前提です。人が1つ1つ手作業でコードを書くものではありません（判断が必要な場面ではAIから都度確認を求められます）。
 
-```mermaid
-flowchart TD
-    subgraph base["常に参照する土台（全フェーズ共通）"]
-        FP["fixed_prompt.md<br/>作業手順書の本体"]
-        SK["スターターキット.md<br/>独立運用への読み替え層"]
-    end
-
-    subgraph p1["フェーズ① 取得・抽出"]
-        E1["extract_kitamoto_v2.py<br/>シンプルなPDF抽出の例"]
-        E2["extract_tondabayashi_v2.py<br/>座標ベース抽出の例"]
-        E3["coord_extract_utils.py<br/>座標抽出の共通関数"]
-    end
-
-    subgraph p2["フェーズ② AI要約生成"]
-        SG["story_gen_prompt.md<br/>目的・成果の説明文をAI生成"]
-    end
-
-    subgraph p3["フェーズ③ HTML生成"]
-        BK["build_kitamoto_v3.py<br/>ビルドテンプレート本体"]
-    end
-
-    subgraph p4["フェーズ④ 公開"]
-        GH["新規GitHubリポジトリ<br/>GitHub Pagesで公開"]
-        SB["新規Supabaseプロジェクト<br/>投票機能を使う場合"]
-    end
-
-    base -.随時参照.-> p1
-    base -.随時参照.-> p2
-    base -.随時参照.-> p3
-    base -.随時参照.-> p4
-
-    p1 --> p2 --> p3 --> p4
-```
-
 - **土台（`fixed_prompt.md`・`スターターキット.md`）**：特定のフェーズに属さず、①〜④すべての作業中に立ち返って参照する手順書。`スターターキット.md`は`fixed_prompt.md`中の個人アカウント固有の記述を上書きする役割
-- **フェーズ①（取得・抽出）**：元データのPDF構造に応じて、シンプルな例（`extract_kitamoto_v2.py`）と座標ベースの例（`extract_tondabayashi_v2.py`）のどちらを参考にするか判断する
+- **フェーズ①（取得・抽出）**：元データのPDF構造に応じて、シンプルな例（`extract_simple.py`）と座標ベースの例（`extract_coordinate.py`）のどちらを参考にするか判断する
 - **フェーズ②（AI要約生成）**：抽出したデータをもとに、カードに表示する説明文をAIが生成する
-- **フェーズ③（HTML生成）**：`build_kitamoto_v3.py`をコピーして自治体固有の値を埋め、最終HTMLを組み立てる
+- **フェーズ③（HTML生成）**：`build_html.py`をコピーして自治体固有の値を埋め、最終HTMLを組み立てる
 - **フェーズ④（公開）**：完成したHTMLを新規GitHubリポジトリにアップロードしGitHub Pagesで公開する。投票機能を使う場合は新規Supabaseプロジェクトも個別に用意する（本体ツールとは独立した環境で運用する設計）
 
-カード内の項目（成果セクション・廃止した場合の影響セクション）は、`LABELS.show_outcome` / `LABELS.show_impact` で表示・非表示を選べます。データの有無ではなく、制作者の好み（カードの情報量をどこまで絞るか）で決めてよい項目です。
+カード内の項目（事業番号・担当課／タグ行／目的・事業内容／決算額・人件費チェック／成果／廃止した場合の影響）は、`LABELS.show_*`で個別に表示・非表示を選べます。データの有無ではなく、制作者の好み（カードの情報量をどこまで絞るか）で決めてよい項目です。
 
 ---
 

@@ -1,5 +1,5 @@
 r"""
-build_kitamoto_v3.py
+build_html.py（旧build_kitamoto_v3.py。自治体固有のビルドテンプレート本体）
 北本市 事務事業優先度評価ツール HTML生成スクリプト（v3試作・全体像マップ設計）
 03_パッチ済みデータ\\kitamoto_master_v2.csv → 04_本番HTML生成\\kitamoto_v3_index.html
 
@@ -93,8 +93,13 @@ LABELS = {
     'local_storage_key': 'kitamoto6_v3_ratings',
     'pdf_url':           'https://www.city.kitamoto.lg.jp/material/files/group/52/R6jimujigyouhyoukasi-to.pdf',
     'personnel_cost':    '含む',
-    'show_outcome':      True,   # 評価シートに成果指標のデータが構造的に存在しない自治体は False にする
-    'show_impact':       True,   # 評価シートに廃止した場合の影響を記載する欄が構造的に存在しない自治体は False にする
+    # カードのセクション表示可否（データの有無ではなく制作者の好みで決めてよい。fixed_prompt.md参照）
+    'show_emeta':        True,   # 事業番号・担当課
+    'show_tags':         True,   # タグ行（法定根拠／行政評価／提供形態）
+    'show_desc':         True,   # 目的・事業内容
+    'show_budget':       True,   # 決算額・人件費チェック（セット）
+    'show_outcome':      True,   # 成果
+    'show_impact':       True,   # 廃止した場合の影響
 }
 LABELS_JSON = json.dumps(LABELS, ensure_ascii=False)
 
@@ -692,18 +697,18 @@ function renderEval(app) {
     <div class="pbwrap no-print"><div class="pbfill" style="width:${pct}%"></div></div>
     <div class="ecard ${rcls}">
       <div class="ename">${esc(e.name)}</div>
-      <div class="emeta">${esc(LABELS.no_col)}：${esc(e.no)}　${esc(LABELS.dept)}：${esc(e.dept)}</div>
-      <div class="tags">
+      ${LABELS.show_emeta !== false ? `<div class="emeta">${esc(LABELS.no_col)}：${esc(e.no)}　${esc(LABELS.dept)}：${esc(e.dept)}</div>` : ''}
+      ${LABELS.show_tags !== false ? `<div class="tags">
         ${rootTagHtml(e.root)}
         ${evTagHtml(e.ev)}
         ${ptypeTagHtml(e.ptype)}
-      </div>
-      <div class="story">
+      </div>` : ''}
+      ${LABELS.show_desc !== false ? `<div class="story">
         <div class="story-label">目的・事業内容</div>
         <p>${esc(e.story_p1)}</p>
-      </div>
-      <div class="ebudget">R6決算：<span class="amt">${budgetText}</span>　<span style="color:#6b7280;font-size:.8rem">（住民1人あたり約${fmt(Math.round(e.budget*1000/LABELS.population))}円/年）</span></div>
-      <div style="font-size:.78rem;color:#6b7280;margin:-8px 0 12px">人件費：${personnelCostHtml()}</div>
+      </div>` : ''}
+      ${LABELS.show_budget !== false ? `<div class="ebudget">R6決算：<span class="amt">${budgetText}</span>　<span style="color:#6b7280;font-size:.8rem">（住民1人あたり約${fmt(Math.round(e.budget*1000/LABELS.population))}円/年）</span></div>
+      <div style="font-size:.78rem;color:#6b7280;margin:-8px 0 12px">人件費：${personnelCostHtml()}</div>` : ''}
       ${LABELS.show_outcome !== false ? `<div class="story">
         <div class="story-label">成果</div>
         <p>${esc(e.story_p2)}</p>
@@ -716,7 +721,10 @@ function renderEval(app) {
     <div class="sticky-spacer tall no-print"></div>
     <div class="sticky-actions no-print">
       <div class="sticky-inner">
-        <p class="ai-note">※${['目的・事業内容', LABELS.show_outcome !== false ? '成果' : null, LABELS.show_impact !== false ? '廃止した場合の影響' : null].filter(Boolean).join('、')}の説明文は、評価シートを元にAIが自動生成しています。内容に違和感がある場合や詳細を確認したい場合は、下のリンクから評価シートをご確認ください。</p>
+        ${(() => {
+          const aiFields = [LABELS.show_desc !== false ? '目的・事業内容' : null, LABELS.show_outcome !== false ? '成果' : null, LABELS.show_impact !== false ? '廃止した場合の影響' : null].filter(Boolean);
+          return aiFields.length > 0 ? `<p class="ai-note">※${aiFields.join('、')}の説明文は、評価シートを元にAIが自動生成しています。内容に違和感がある場合や詳細を確認したい場合は、下のリンクから評価シートをご確認ください。</p>` : '';
+        })()}
         <a class="btn btn-p btn-full" href="${esc(LABELS.pdf_url)}#page=${e.pdf_page}" target="_blank">📄 評価シートを確認（p.${e.pdf_page}）</a>
         <p class="maphint" style="margin:8px 0">評価（続行/廃止/見直しを選択）するとサマリー・投票画面の自分の評価に反映されます。</p>
         <div class="rbtns">
@@ -768,16 +776,21 @@ function renderGuide(app) {
           <div class="gc-proc">処理</div>
         </div>
         <div class="grow">
-          <div class="gc-item">事業名・${esc(LABELS.no_col)}・${esc(LABELS.dept)}</div>
-          <div class="gc-src">事務事業一覧（Excel）の「事務事業名」「ページ番号」「担当課」欄をそのまま使っています。</div>
+          <div class="gc-item">事業名</div>
+          <div class="gc-src">事務事業一覧（Excel）の「事務事業名」欄をそのまま使っています。</div>
           <div class="gc-proc">${procBadge('転記')}</div>
         </div>
+        ${LABELS.show_emeta !== false ? `<div class="grow">
+          <div class="gc-item">${esc(LABELS.no_col)}・${esc(LABELS.dept)}</div>
+          <div class="gc-src">事務事業一覧（Excel）の「ページ番号」「担当課」欄をそのまま使っています。</div>
+          <div class="gc-proc">${procBadge('転記')}</div>
+        </div>` : ''}
         <div class="grow">
           <div class="gc-item">施策（画面上部）</div>
           <div class="gc-src">評価シート（PDF）の「施策」欄（コードと名称）をそのまま使っています。</div>
           <div class="gc-proc">${procBadge('転記')}</div>
         </div>
-        <div class="grow">
+        ${LABELS.show_tags !== false ? `<div class="grow">
           <div class="gc-item">法定義務タグ</div>
           <div class="gc-src">評価シート末尾の分析設問「国・県・民間ではなく、市が主体的に実施すべき事業か。」への回答。
             <div class="gmap">
@@ -806,13 +819,13 @@ function renderGuide(app) {
           <div class="gc-item">提供形態タグ</div>
           <div class="gc-src">事務事業一覧の「事業概要」欄の文章をAIが読み、住民への提供のされ方（現金給付か、業者委託か、施設・インフラ整備か等）で分類したものです。分類結果は人の目でも確認・補正しています。評価シートに直接この項目はありません。</div>
           <div class="gc-proc">${procBadge('AI分類')}</div>
-        </div>
-        <div class="grow">
+        </div>` : ''}
+        ${LABELS.show_desc !== false ? `<div class="grow">
           <div class="gc-item">目的・事業内容</div>
           <div class="gc-src">事務事業一覧の「事業概要」欄の文章を、AIが1〜2文に要約したものです。</div>
           <div class="gc-proc">${procBadge('AI要約')}</div>
-        </div>
-        <div class="grow">
+        </div>` : ''}
+        ${LABELS.show_budget !== false ? `<div class="grow">
           <div class="gc-item">決算額</div>
           <div class="gc-src">評価シートの「事務事業のコスト」表、「総事業費」行の「R6決算」列の数値をそのまま使っています。決算額が0円の事業（4件）は「—」と表示されます。北本市はこの決算額に人件費を含みます（下の「人件費」欄参照）。隣に表示される「住民1人あたり約◯円/年」は、この決算額を北本市の人口（${fmt(LABELS.population)}人）で割って算出した参考値で、評価シートには記載されていません。</div>
           <div class="gc-proc">${procBadge('転記')}</div>
@@ -821,7 +834,7 @@ function renderGuide(app) {
           <div class="gc-item">人件費 含む／含まない</div>
           <div class="gc-src">北本市は全451件共通で「含む」表記です（個別の事業ごとに判定しているものではありません）。</div>
           <div class="gc-proc">${procBadge('転記')}</div>
-        </div>
+        </div>` : ''}
         ${LABELS.show_outcome !== false ? `<div class="grow">
           <div class="gc-item">成果</div>
           <div class="gc-src">評価シートの「指標名」欄（活動指標・成果指標の名称）の記載をもとに、AIが文章化しています。実績の数値は評価シート上の並び順が事業ごとに揺れるため使用していません。成果を測る指標が設定されていない事業では、その旨を記載しています。</div>
@@ -1003,7 +1016,11 @@ function downloadVoteCsv() {
 
 // 自分で分析したい人向け：評価・投票の状況によらず全事務事業を出力（行政の公表がPDFのみのため）
 function allEventsCsvText() {
-  const header = ['事業番号','事務事業名',LABELS.cls,LABELS.dept,'金額(千円)','法定義務','提供形態','行政評価','目的・事業内容']
+  const header = ['事業番号','事務事業名',LABELS.cls]
+    .concat(LABELS.show_emeta !== false ? [LABELS.dept] : [])
+    .concat(LABELS.show_budget !== false ? ['金額(千円)'] : [])
+    .concat(LABELS.show_tags !== false ? ['法定義務','提供形態','行政評価'] : [])
+    .concat(LABELS.show_desc !== false ? ['目的・事業内容'] : [])
     .concat(LABELS.show_outcome !== false ? ['成果'] : [])
     .concat(LABELS.show_impact !== false ? ['廃止した場合の影響'] : []);
   const csvRows = EVENTS.map(e => {
@@ -1012,7 +1029,11 @@ function allEventsCsvText() {
     const impactText = hasImpact
       ? `この事業がなくなった場合、${impact}という問題が起きると想定されています。`
       : '評価シートに記載されていません。';
-    return [e.no, e.name, e.cls, e.dept, e.budget, e.root, PTYPE_LABEL[e.ptype] || e.ptype, e.ev, e.story_p1]
+    return [e.no, e.name, e.cls]
+      .concat(LABELS.show_emeta !== false ? [e.dept] : [])
+      .concat(LABELS.show_budget !== false ? [e.budget] : [])
+      .concat(LABELS.show_tags !== false ? [e.root, PTYPE_LABEL[e.ptype] || e.ptype, e.ev] : [])
+      .concat(LABELS.show_desc !== false ? [e.story_p1] : [])
       .concat(LABELS.show_outcome !== false ? [e.story_p2] : [])
       .concat(LABELS.show_impact !== false ? [impactText] : []);
   });
