@@ -92,7 +92,7 @@ LABELS = {
     'population':        65274,
     'local_storage_key': 'kitamoto6_v3_ratings',
     'pdf_url':           'https://www.city.kitamoto.lg.jp/material/files/group/52/R6jimujigyouhyoukasi-to.pdf',
-    'personnel_cost':    '含む',
+    'personnel_cost':    '含む',   # 固定3択に当てはめず実態を記述する自由記述（fixed_prompt.md参照）
     # カードのセクション表示可否（データの有無ではなく制作者の好みで決めてよい。fixed_prompt.md参照）
     'show_emeta':        True,   # 事業番号・担当課
     'show_tags':         True,   # タグ行（法定根拠／行政評価／提供形態）
@@ -407,8 +407,10 @@ function fracPct(count, total) {
 }
 
 function personnelCostHtml() {
-  const val = LABELS.personnel_cost || '確認取れず';
-  return ['含む','含まない','確認取れず'].map(o => `${o===val?'☑':'☐'}${o}`).join('　');
+  // personnel_cost は固定3択（含む/含まない/確認取れず）ではなく、評価シートを確認した実態を
+  // そのまま記述する自由記述（fixed_prompt.md参照）。単純に「含む」「含まない」で言い切れる
+  // 自治体はそのまま書いてよいし、部分的にしか判定できない自治体は実態を明示する。
+  return esc(LABELS.personnel_cost || '確認取れず');
 }
 
 function rootTagHtml(root) {
@@ -831,8 +833,8 @@ function renderGuide(app) {
           <div class="gc-proc">${procBadge('転記')}</div>
         </div>
         <div class="grow">
-          <div class="gc-item">人件費 含む／含まない</div>
-          <div class="gc-src">北本市は全451件共通で「含む」表記です（個別の事業ごとに判定しているものではありません）。</div>
+          <div class="gc-item">人件費</div>
+          <div class="gc-src">評価シートを確認し、決算額にどこまで人件費が含まれるかを実態に即して記述しています：「${esc(LABELS.personnel_cost || '確認取れず')}」（全事業共通の表記で、個別の事業ごとに判定しているものではありません）。</div>
           <div class="gc-proc">${procBadge('転記')}</div>
         </div>` : ''}
         ${LABELS.show_outcome !== false ? `<div class="grow">
