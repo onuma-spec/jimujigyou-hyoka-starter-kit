@@ -1,7 +1,7 @@
 r"""
 patch_show_labels.py
 生成済みHTML（build_html.py等のshow_*対応テンプレート由来）の LABELS のうち、
-表示制御フラグ（show_*・enable_voting）だけを、再ビルドなしで書き換えるツール。
+評価カードの表示制御フラグ（show_*）だけを、再ビルドなしで書き換えるツール。
 
 背景：評価カードの各セクション（事業番号・担当課／タグ／目的・事業内容／決算額・人件費／成果／
 廃止した場合の影響）は LABELS.show_* で表示・非表示を切り替えられるが、従来は Python の
@@ -14,15 +14,29 @@ story_p1/p2・タグ・予算等）には一切触れずに表示だけを何度
 既存7自治体（西宮市・北本市・湖西市・品川区・富田林市・聖籠町・一宮市）は
 このJS側ロジック自体がまだ存在しないため非対応（別途移植が必要）。
 
-対象キー（安全のため、この7つ以外は変更できない）：
-show_emeta, show_tags, show_desc, show_budget, show_outcome, show_impact, enable_voting
+対象キー（安全のため、この6つ以外は変更できない）：
+show_emeta, show_tags, show_desc, show_budget, show_outcome, show_impact
+
+※ enable_voting（投票機能／Supabase連携のオンオフ）は意図的に対象外。show_*が「カードの
+どのセクションを見せるか」という同種の設定なのに対し、enable_voting は複数の関数
+（submitToSupabase・loadPeopleData・renderVoteSection等）に分散した機能全体のオンオフであり、
+ビルドによってはJS側の対応が一部漏れていることがある（2026-08-05・朝来市の試作ビルドで実際に
+発覚：LABELSにenable_votingの値はあってもJS側に読み取り箇所が1つも無く、値を書き換えても
+何も変わらなかった）。この種の機能トグルは、値を書き換えるだけでは安全に反映される保証がなく、
+再ビルドして初めてJS側の実装を確認できるため、このツールでは扱わない。
 
 使い方：
-  python patch_show_labels.py <html_file> --show-desc false --enable-voting true
+  python patch_show_labels.py <html_file> --show-desc false --show-tags true
   python patch_show_labels.py <html_file> --dry-run --show-tags false
 
 何度でも実行可能。実行のたびに直前の状態を <html_file>.bak にバックアップする
 （--no-backup で無効化可）。
+
+バックアップから元に戻す方法：
+  <html_file>.bak を <html_file> という名前でコピーし直すだけでよい（Windowsの場合）
+  copy <html_file>.bak <html_file>
+  ※ .bak は「直前の1回分」しか保持しない。連続して実行すると古いバックアップは
+  上書きされるため、複数世代残したい場合は都度別名で退避すること。
 """
 import argparse
 import json
@@ -33,7 +47,6 @@ from pathlib import Path
 ALLOWED_KEYS = [
     'show_emeta', 'show_tags', 'show_desc',
     'show_budget', 'show_outcome', 'show_impact',
-    'enable_voting',
 ]
 
 

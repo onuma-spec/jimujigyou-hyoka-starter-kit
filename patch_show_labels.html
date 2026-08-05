@@ -96,9 +96,17 @@
     <h2><span class="step-num">3</span>実行</h2>
     <div class="backup-row">
       <input type="checkbox" id="backupCheck" checked>
-      <label for="backupCheck">変更前の状態をバックアップとして保存する（推奨）</label>
+      <label for="backupCheck">変更前の状態をバックアップ（.bak）として保存する（推奨）</label>
     </div>
+    <p class="desc" style="margin:4px 0 12px">保存先はダイアログで毎回選べます。元に戻したくなったら、下の「バックアップから復元」でこの.bakファイルを選んでください。</p>
     <button class="primary" id="btnRun" disabled>変更を保存</button>
+  </div>
+
+  <div class="card hidden" id="restoreCard">
+    <h2>🔄 バックアップから復元</h2>
+    <p class="desc" style="margin-bottom:12px">ステップ1で選んだファイルを、保存済みの.bakファイル（またはその他のバックアップHTML）の内容でそのまま上書きします。show_*の選択状態は関係なく、ファイル全体を丸ごと差し戻します。</p>
+    <button class="primary" id="btnRestore">.bakファイルを選んで復元…</button>
+    <input type="file" id="restoreFallbackInput" accept=".bak,.html" class="hidden">
   </div>
 
   <div class="card hidden" id="logCard">
@@ -108,6 +116,10 @@
 </div>
 
 <script>
+// enable_voting（投票機能）は意図的に対象外。show_*とは異なり複数の関数に分散した機能
+// 全体のオンオフで、ビルドによってはJS側の対応が一部漏れていることがある
+// （2026-08-05・朝来市の試作ビルドで実際に発覚：値を書き換えても何も変わらなかった）。
+// 詳細は patch_show_labels.py のdocstring参照。
 const ITEM_DEFS = [
   {key:'show_emeta',   label:'事業番号・担当課',                       desc:'カード上部に事業番号・担当課を表示するか'},
   {key:'show_tags',    label:'タグ行',                                 desc:'法定根拠／行政評価／提供形態のタグを表示するか'},
@@ -115,7 +127,6 @@ const ITEM_DEFS = [
   {key:'show_budget',  label:'決算額・人件費表示',                     desc:'決算額と人件費の含み方を表示するか（セット）'},
   {key:'show_outcome', label:'成果',                                   desc:'AI要約による第2段落（成果指標の実績）を表示するか'},
   {key:'show_impact',  label:'廃止した場合の影響',                     desc:'第3段落（廃止した場合に想定される影響）を表示するか'},
-  {key:'enable_voting',label:'投票機能（Supabase連携）',               desc:'投票ボタン・みんなの評価の集計・投票CSVを使うか'},
 ];
 
 const supportsFSAccess = 'showOpenFilePicker' in window;
@@ -184,6 +195,7 @@ function renderItems() {
   });
   document.getElementById('itemsCard').classList.remove('hidden');
   document.getElementById('runCard').classList.remove('hidden');
+  document.getElementById('restoreCard').classList.remove('hidden');
   document.getElementById('btnRun').disabled = false;
 }
 
@@ -295,6 +307,61 @@ document.getElementById('btnRun').addEventListener('click', async () => {
   state.labels = newLabels;
   const {start, end} = extractLabelsJson(newText);
   state.labelsStart = start; state.labelsEnd = end;
+});
+
+async function performRestore(backupText, backupName) {
+  if (!confirm(state.fileName + ' を「' + backupName + '」の内容で丸ごと上書きします。よろしいですか？')) {
+    log('復元をキャンセルしました。');
+    return;
+  }
+  if (supportsFSAccess && state.handle) {
+    try {
+      const writable = await state.handle.createWritable();
+      await writable.write(backupText);
+      await writable.close();
+      log(state.fileName + ' を「' + backupName + '」の内容で復元しました。');
+    } catch (e) {
+      log('エラー: ' + e.message);
+      return;
+    }
+  } else {
+    triggerDownload(backupText, state.fileName);
+    log('復元後のファイルをダウンロードしました。元の場所へ手動で上書き保存してください。');
+  }
+  // 内部状態も復元後の内容に合わせて更新し、チェックボックスの表示に反映する
+  try {
+    state.originalText = backupText;
+    const {start, end} = extractLabelsJson(backupText);
+    state.labelsStart = start; state.labelsEnd = end;
+    state.labels = JSON.parse(backupText.slice(start, end));
+    renderItems();
+  } catch (e) {
+    log('注意：復元後のファイルからLABELSを再読込できませんでした（' + e.message + '）。show_*の選択状態は画面をリロードして確認してください。');
+  }
+}
+
+document.getElementById('btnRestore').addEventListener('click', async () => {
+  if (supportsFSAccess) {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{description: 'バックアップ / HTML', accept: {'text/plain': ['.bak'], 'text/html': ['.html']}}],
+      });
+      const file = await handle.getFile();
+      const text = await file.text();
+      await performRestore(text, file.name);
+    } catch (e) {
+      if (e.name !== 'AbortError') alert('ファイルを開けませんでした: ' + e.message);
+    }
+  } else {
+    document.getElementById('restoreFallbackInput').click();
+  }
+});
+
+document.getElementById('restoreFallbackInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  await performRestore(text, file.name);
 });
 </script>
 </body>
