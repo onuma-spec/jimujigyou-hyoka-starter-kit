@@ -222,6 +222,15 @@ function loadFromText(text, name) {
     alert('エラー: ' + e.message + '\nこのHTMLは show_* 対応テンプレート由来ではない可能性があります。');
     return;
   }
+  // LABELSブロック自体は見つかっても、JS側にshow_*を読む条件分岐が無ければ
+  // 値を書き換えても画面には何も反映されない（無言の失敗）。事前に検出して止める。
+  if (!text.includes('LABELS.show_desc !== false')) {
+    document.getElementById('fileInfo').textContent = '';
+    alert('エラー: このHTMLのJS側に `LABELS.show_desc !== false` 等の条件分岐が見つかりません。\n'
+      + '2026-08-04より前のテンプレート由来など、show_*非対応のHTMLの可能性があります。'
+      + 'LABELSは書き換え可能でも、画面表示には反映されません。');
+    return;
+  }
   document.getElementById('fileInfo').innerHTML = `<span class="filename">${name}</span><span class="badge">読み込み完了</span>`;
   renderItems();
 }

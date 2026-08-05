@@ -9,7 +9,8 @@ LABELS 辞書を編集して build_html.py を再実行する必要があった�
 HTML ファイルの LABELS ブロックだけを直接書き換えることで、データ（EVENTS配列の
 story_p1/p2・タグ・予算等）には一切触れずに表示だけを何度でも変更できるようにする。
 
-前提：対象HTMLのJS側に `LABELS.show_desc !== false` 等の条件分岐が既に存在すること。
+前提：対象HTMLのJS側に `LABELS.show_desc !== false` 等の条件分岐が既に存在すること
+（存在しない場合は実行時に検出してエラー終了する）。
 
 対象キー（安全のため、この6つ以外は変更できない）：
 show_emeta, show_tags, show_desc, show_budget, show_outcome, show_impact
@@ -123,6 +124,15 @@ def main():
         print(f'エラー: {e}', file=sys.stderr)
         print('このHTMLは show_* 対応テンプレート（build_html.py等）由来ではない可能性があります。',
               file=sys.stderr)
+        sys.exit(1)
+
+    # LABELSブロック自体は見つかっても、JS側にshow_*を読む条件分岐が無ければ
+    # 値を書き換えても画面には何も反映されない（無言の失敗）。事前に検出して止める。
+    if 'LABELS.show_desc !== false' not in html_text:
+        print('エラー: このHTMLのJS側に `LABELS.show_desc !== false` 等の条件分岐が見つかりません。',
+              file=sys.stderr)
+        print('2026-08-04より前のテンプレート由来など、show_*非対応のHTMLの可能性があります。'
+              'LABELSは書き換え可能でも、画面表示には反映されません。', file=sys.stderr)
         sys.exit(1)
 
     print(f'対象ファイル: {path}')
