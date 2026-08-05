@@ -10,9 +10,6 @@ HTML ファイルの LABELS ブロックだけを直接書き換えることで�
 story_p1/p2・タグ・予算等）には一切触れずに表示だけを何度でも変更できるようにする。
 
 前提：対象HTMLのJS側に `LABELS.show_desc !== false` 等の条件分岐が既に存在すること。
-2026-08-04以降の build_html.py 系テンプレートでビルドされたファイルのみ有効。
-既存7自治体（西宮市・北本市・湖西市・品川区・富田林市・聖籠町・一宮市）も
-2026-08-05に対応版へ更新済み。
 
 対象キー（安全のため、この6つ以外は変更できない）：
 show_emeta, show_tags, show_desc, show_budget, show_outcome, show_impact
