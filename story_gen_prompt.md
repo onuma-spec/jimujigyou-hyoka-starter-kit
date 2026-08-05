@@ -36,7 +36,7 @@ story_p1 と story_p2 は **別々のパスで生成する**。
 - **第2パス**：`if row.get('story_p2'): continue`（p2が空の行のみ生成）
 
 gen_story.py のデフォルトは **第2パス（story_p2のみ）**。  
-story_p1 を再生成したい場合は、スキップ条件と出力フィールドを変更する。
+story_p1 を生成したい場合は、スキップ条件・出力フィールドの変更だけでは足りない。下記「gen_story.py（現行コード）」はstory_p2専用の実装で、使用する行データ（`output_name`/`outcome_name`系）もプロンプト本文もstory_p2のものになっている。story_p1を生成する場合は、プロンプト本文を上記「story_p1 プロンプトテンプレート」節の内容（`name`・`overview`のみを使う）に丸ごと差し替える必要がある（詳細は下記「実行手順」参照）。
 
 ---
 
@@ -116,7 +116,6 @@ from pathlib import Path
 
 # ===== 自治体ごとに変更する =====
 CSV_PATH   = r'master_data.csv'  # 自治体ごとの作業フォルダ内のマスターCSVへのパスに変更する
-POPULATION = 14000  # 住民人口（story_p1生成時のみ使用）
 MODEL      = 'claude-haiku-4-5-20251001'
 # ================================
 
@@ -223,7 +222,10 @@ if __name__ == '__main__':
 
 1. `CSV_PATH` を自治体に合わせて編集する
 2. master CSV に `story_p1` `story_p2` 列が存在することを確認（空でOK）
-3. 第1パス（story_p1 生成）：スキップ条件を `story_p1`、出力を `story_p1` に変更して実行
+3. 第1パス（story_p1 生成）：以下を全て変更してから実行する（単純なフィールド名の置換では済まない）
+   - スキップ条件：`row.get('story_p2')` → `row.get('story_p1')`
+   - プロンプト本文：「story_p2生成専用」の本文（`output_name`/`outcome_name`等を使う）を、上記「story_p1 プロンプトテンプレート」節の本文（`name`・`overview`のみを使う）に丸ごと差し替える
+   - 出力の書き込み先：`row['story_p2']` → `row['story_p1']`
 4. 第2パス（story_p2 生成）：デフォルト設定のまま実行
    ```
    python gen_story.py
