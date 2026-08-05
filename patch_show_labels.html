@@ -66,6 +66,15 @@
     background:#fbf0ec; border:1px solid #e8c3b6; color:var(--warn);
     border-radius:8px; padding:10px 14px; font-size:0.85rem; margin-bottom:16px;
   }
+  .info-box{
+    background:#eef3f0; border:1px solid #cfe0d6; color:var(--ink);
+    border-radius:8px; padding:10px 14px; font-size:0.85rem; margin-bottom:16px;
+  }
+  footer{
+    margin-top:32px; padding-top:16px; border-top:1px solid var(--line);
+    font-size:0.8rem; color:var(--sub);
+  }
+  footer p{margin:0 0 6px}
   .hidden{display:none}
 </style>
 </head>
@@ -73,6 +82,12 @@
 <div class="wrap">
   <h1>表示設定変更ツール</h1>
   <p class="lead"><a href="https://github.com/onuma-spec/jimujigyou-hyoka-starter-kit" target="_blank" rel="noopener">jimujigyou-hyoka-starter-kit</a>を使用して生成したHTMLファイルの評価カード表示設定だけを、データに触れずに書き換えます。</p>
+
+  <div class="info-box">
+    <strong>対象：</strong>2026-08-04以降の<code>build_html.py</code>系テンプレートでビルドしたHTMLのみ動作します。
+    西宮市・北本市・湖西市・品川区・富田林市・聖籠町・一宮市など、既に公開されているツールは
+    表示設定を切り替えるJSコード自体が入っていないため、このツールで値を書き換えても画面は変わりません。
+  </div>
 
   <div id="unsupportedWarn" class="warn-box hidden">
     お使いのブラウザはファイルへの直接上書き（File System Access API）に対応していません。
@@ -113,6 +128,11 @@
     <h2>ログ</h2>
     <div id="log"></div>
   </div>
+
+  <footer>
+    <p>本ツールはファイルを直接上書きします。実行前に「バックアップとして保存する」を有効にし、変更後は必ずブラウザで表示を確認してください。内容の正確性・本ツールの利用によって生じたいかなる結果についても保証しません。自己責任でご利用ください。</p>
+    <p>本ツールはClaude（AI）を用いて作成されています。</p>
+  </footer>
 </div>
 
 <script>
