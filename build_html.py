@@ -291,7 +291,7 @@ body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;background:#f3f4f6;co
 .ind-row{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px dashed #e5e7eb;font-size:.88rem}
 .ind-row:last-child{border-bottom:none}
 .ind-name{color:#374151}
-.ind-val{font-weight:700;color:#1e40af;white-space:nowrap;flex-shrink:0}
+.ind-val{font-weight:700;color:#1e40af;white-space:nowrap;flex-shrink:0;margin-left:auto}
 .ai-note{font-size:.75rem;color:#713f12;line-height:1.65;margin-bottom:8px;background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:8px 10px}
 .sticky-actions{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #e5e7eb;z-index:100;box-shadow:0 -4px 12px rgba(0,0,0,.08)}
 .sticky-inner{max-width:780px;margin:0 auto;padding:10px 12px}
@@ -472,20 +472,27 @@ function indicatorPairs(e, prefix) {
   return pairs;
 }
 function outcomeSectionHtml(e) {
+  // 活動指標・成果指標のブロックは常に両方表示し、データがない場合は「データなし」と明示する
+  // （2026-08-06追加修正：旧仕様は両方空欄の場合に1文だけのフォールバックを出していたが、
+  // 「片方だけ空欄」の場合にその側のブロックごと消える挙動が分かりにくいとの指摘を受け、
+  // 常時2ブロック表示に統一した）。
   const outputPairs = indicatorPairs(e, 'output');
   const outcomePairs = indicatorPairs(e, 'outcome');
-  if (!outputPairs.length && !outcomePairs.length) {
-    return `<p>評価シートに成果を測る指標の記載がありません。</p>`;
-  }
-  const block = (label, pairs) => pairs.length ? `<div class="ind-block"><div class="ind-label">${label}</div>${pairs.map(p => `<div class="ind-row"><span class="ind-name">${esc(p.name)}</span><span class="ind-val">${p.val ? esc(p.val) : 'データなし'}</span></div>`).join('')}</div>` : '';
+  const block = (label, pairs) => {
+    const body = pairs.length
+      ? pairs.map(p => `<div class="ind-row"><span class="ind-name">${esc(p.name)}</span><span class="ind-val">${p.val ? esc(p.val) : 'データなし'}</span></div>`).join('')
+      : `<div class="ind-row"><span class="ind-val">データなし</span></div>`;
+    return `<div class="ind-block"><div class="ind-label">${label}</div>${body}</div>`;
+  };
   return block('🎯 活動指標', outputPairs) + block('📊 成果指標', outcomePairs);
 }
 function outcomeSectionText(e) {
   const outputPairs = indicatorPairs(e, 'output');
   const outcomePairs = indicatorPairs(e, 'outcome');
-  if (!outputPairs.length && !outcomePairs.length) return '評価シートに成果を測る指標の記載がありません。';
-  const fmt = (label, pairs) => pairs.length ? `${label}: ` + pairs.map(p => `${p.name}＝${p.val || 'データなし'}`).join('／') : '';
-  return [fmt('活動指標', outputPairs), fmt('成果指標', outcomePairs)].filter(Boolean).join('　');
+  const fmt = (label, pairs) => pairs.length
+    ? `${label}: ` + pairs.map(p => `${p.name}＝${p.val || 'データなし'}`).join('／')
+    : `${label}: データなし`;
+  return [fmt('活動指標', outputPairs), fmt('成果指標', outcomePairs)].join('　');
 }
 function ptypeTagHtml(ptype) {
   const tier = PTYPE_TIER[ptype] || 'amber';
