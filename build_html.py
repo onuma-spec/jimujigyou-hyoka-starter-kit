@@ -538,6 +538,9 @@ function renderMap(app) {
       <h1>${esc(LABELS.tool_title)}</h1>
       <div class="sub">${esc(LABELS.card_title)}（全${EVENTS.length}件・${esc(LABELS.cls)}${fullList.length}区分）</div>
     </div>
+    <div class="card ai-disclosure" style="font-size:.78rem;color:#4b5563;line-height:1.5;background:#f7f9fc;border:1px solid #e5e9f0">
+      ℹ️ このツールに掲載する事業の「目的・事業内容」「成果」等の説明文は、市の評価シートをもとにAIが自動生成しています。提供形態タグ（住民へ直接サービスを提供／団体・事業者へ補助金を支給 等）もAIが分類しています。内容に違和感がある場合は、各カードから元の評価シート（PDF）をご確認いただけます。詳しくは各カードの「📖 カードの説明」をご覧ください。
+    </div>
     <div class="card">
       <div class="filterrow">${filterBtns}</div>
       <p class="maphint">${esc(LABELS.cls)}を選ぶ→事務事業を選ぶ→評価する→投票する、という流れで進みます。まずは${esc(LABELS.cls)}のカードを選んでください。上部のボタンを使うと、法定義務の有無によって事業を絞り込めます（バーの長さと％は、絞り込み対象の中でその${esc(LABELS.cls)}が占める規模を表します）。</p>
