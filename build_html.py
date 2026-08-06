@@ -68,6 +68,22 @@ with open(f"{BASE}\\03_パッチ済みデータ\\kitamoto_master_v2.csv", encodi
             'ptype':        PTYPE_BY_NO.get(row['no'], '12'),
             'story_p1':     row['story_p1'] or '',
             'story_p2':     row['story_p2'] or '',
+            'output_name':   row.get('output_name', '') or '',
+            'output_val':    row.get('output_val', '') or '',
+            'output_name2':  row.get('output_name2', '') or '',
+            'output_val2':   row.get('output_val2', '') or '',
+            'output_name3':  row.get('output_name3', '') or '',
+            'output_val3':   row.get('output_val3', '') or '',
+            'output_name4':  row.get('output_name4', '') or '',
+            'output_val4':   row.get('output_val4', '') or '',
+            'outcome_name':  row.get('outcome_name', '') or '',
+            'outcome_val':   row.get('outcome_val', '') or '',
+            'outcome_name2': row.get('outcome_name2', '') or '',
+            'outcome_val2':  row.get('outcome_val2', '') or '',
+            'outcome_name3': row.get('outcome_name3', '') or '',
+            'outcome_val3':  row.get('outcome_val3', '') or '',
+            'outcome_name4': row.get('outcome_name4', '') or '',
+            'outcome_val4':  row.get('outcome_val4', '') or '',
             'story_impact': row['story_impact'] or '',
             'pdf_page':     int(row['pdf_page'] or 0),
             'cls':          row['cls'] or 'データなし',
@@ -269,6 +285,13 @@ body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;background:#f3f4f6;co
 .story{margin-bottom:14px}
 .story p{font-size:.9rem;line-height:1.75;color:#1f2937;margin-bottom:6px}
 .story-label{font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:3px;letter-spacing:.03em}
+.ind-block{margin-bottom:8px}
+.ind-block:last-child{margin-bottom:0}
+.ind-label{font-size:.72rem;font-weight:700;color:#6b7280;margin:6px 0 2px;letter-spacing:.03em}
+.ind-row{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px dashed #e5e7eb;font-size:.88rem}
+.ind-row:last-child{border-bottom:none}
+.ind-name{color:#374151}
+.ind-val{font-weight:700;color:#1e40af;white-space:nowrap;flex-shrink:0}
 .ai-note{font-size:.75rem;color:#713f12;line-height:1.65;margin-bottom:8px;background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:8px 10px}
 .sticky-actions{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #e5e7eb;z-index:100;box-shadow:0 -4px 12px rgba(0,0,0,.08)}
 .sticky-inner{max-width:780px;margin:0 auto;padding:10px 12px}
@@ -436,6 +459,33 @@ function evTagShortHtml(ev) {
 function rootPlainHtml(root) {
   const short = root.startsWith('法定義務') ? root.replace('法定義務', '') : root;
   return `<span class="root-plain-${esc(root)}">${esc(short)}</span>`;
+}
+// ── 成果セクション：活動指標・成果指標の直接転記表示（B1、2026-08-06） ──────
+// AI生成（story_p2）をやめ、評価シートの指標名・実績値をそのまま転記する。
+function indicatorPairs(e, prefix) {
+  const pairs = [];
+  for (let i = 1; i <= 4; i++) {
+    const suf = i === 1 ? '' : String(i);
+    const name = e[`${prefix}_name${suf}`];
+    if (name && name !== 'データなし') pairs.push({name, val: e[`${prefix}_val${suf}`] || ''});
+  }
+  return pairs;
+}
+function outcomeSectionHtml(e) {
+  const outputPairs = indicatorPairs(e, 'output');
+  const outcomePairs = indicatorPairs(e, 'outcome');
+  if (!outputPairs.length && !outcomePairs.length) {
+    return `<p>評価シートに成果を測る指標の記載がありません。</p>`;
+  }
+  const block = (label, pairs) => pairs.length ? `<div class="ind-block"><div class="ind-label">${label}</div>${pairs.map(p => `<div class="ind-row"><span class="ind-name">${esc(p.name)}</span><span class="ind-val">${p.val ? esc(p.val) : 'データなし'}</span></div>`).join('')}</div>` : '';
+  return block('🎯 活動指標', outputPairs) + block('📊 成果指標', outcomePairs);
+}
+function outcomeSectionText(e) {
+  const outputPairs = indicatorPairs(e, 'output');
+  const outcomePairs = indicatorPairs(e, 'outcome');
+  if (!outputPairs.length && !outcomePairs.length) return '評価シートに成果を測る指標の記載がありません。';
+  const fmt = (label, pairs) => pairs.length ? `${label}: ` + pairs.map(p => `${p.name}＝${p.val || 'データなし'}`).join('／') : '';
+  return [fmt('活動指標', outputPairs), fmt('成果指標', outcomePairs)].filter(Boolean).join('　');
 }
 function ptypeTagHtml(ptype) {
   const tier = PTYPE_TIER[ptype] || 'amber';
@@ -721,7 +771,7 @@ function renderEval(app) {
       <div style="font-size:.78rem;color:#6b7280;margin:-8px 0 12px">人件費：${personnelCostHtml()}</div>` : ''}
       ${LABELS.show_outcome !== false ? `<div class="story">
         <div class="story-label">成果</div>
-        <p>${esc(e.story_p2)}</p>
+        ${outcomeSectionHtml(e)}
       </div>` : ''}
       ${LABELS.show_impact !== false ? `<div class="story">
         <div class="story-label">廃止した場合の影響</div>
@@ -732,7 +782,7 @@ function renderEval(app) {
     <div class="sticky-actions no-print">
       <div class="sticky-inner">
         ${(() => {
-          const aiFields = [LABELS.show_desc !== false ? '目的・事業内容' : null, LABELS.show_outcome !== false ? '成果' : null, LABELS.show_impact !== false ? '廃止した場合の影響' : null].filter(Boolean);
+          const aiFields = [LABELS.show_desc !== false ? '目的・事業内容' : null, LABELS.show_impact !== false ? '廃止した場合の影響' : null].filter(Boolean);
           return aiFields.length > 0 ? `<p class="ai-note">※${aiFields.join('、')}の説明文は、評価シートを元にAIが自動生成しています。内容に違和感がある場合や詳細を確認したい場合は、下のリンクから評価シートをご確認ください。</p>` : '';
         })()}
         <a class="btn btn-p btn-full" href="${esc(LABELS.pdf_url)}#page=${e.pdf_page}" target="_blank">📄 評価シートを確認（p.${e.pdf_page}）</a>
@@ -847,8 +897,8 @@ function renderGuide(app) {
         </div>` : ''}
         ${LABELS.show_outcome !== false ? `<div class="grow">
           <div class="gc-item">成果</div>
-          <div class="gc-src">評価シートの「指標名」欄（活動指標・成果指標の名称）の記載をもとに、AIが文章化しています。実績の数値は評価シート上の並び順が事業ごとに揺れるため使用していません。成果を測る指標が設定されていない事業では、その旨を記載しています。</div>
-          <div class="gc-proc">${procBadge('AI要約')}</div>
+          <div class="gc-src">評価シートの「指標名・実績の推移」欄（1行目＝活動指標、2行目＝成果指標）の名称とR6実績値を、そのまま転記表示しています。2行目の成果指標は、事業単位ではなく施策（政策分野）単位で設定されているため、同じ施策に属する複数の事業カードで同じ成果指標・数値が繰り返し表示されることがあります。</div>
+          <div class="gc-proc">${procBadge('転記')}</div>
         </div>` : ''}
         ${LABELS.show_impact !== false ? `<div class="grow">
           <div class="gc-item">廃止した場合の影響</div>
@@ -1046,7 +1096,7 @@ function allEventsCsvText() {
       .concat(LABELS.show_budget !== false ? [e.budget] : [])
       .concat(LABELS.show_tags !== false ? [e.root, PTYPE_LABEL[e.ptype] || e.ptype, e.ev] : [])
       .concat(LABELS.show_desc !== false ? [e.story_p1] : [])
-      .concat(LABELS.show_outcome !== false ? [e.story_p2] : [])
+      .concat(LABELS.show_outcome !== false ? [outcomeSectionText(e)] : [])
       .concat(LABELS.show_impact !== false ? [impactText] : []);
   });
   return '﻿' + [header, ...csvRows].map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
