@@ -100,24 +100,43 @@ story_p1 を生成したい場合は、スキップ条件・出力フィール�
 
 **2026-08-04追加修正（朝来市で発覚）**：output_name・outcome_nameが両方とも空欄／データなしの行で、プロンプトに明記したルール（「成果を測る指標が設定されていません。」のみ出力）にAIが従わずJSON生成を拒否するケースが複数発生した。この状態は出力が一意に定まる決定的なケースなので、そもそもAPI呼び出しに頼らず、`gen_story.py`側で機械的に固定文言を埋める分岐を追加した（下記コード参照）。ルールをプロンプトに書いてAIの遵守に賭けるより、決定的なケースはコード側で確定させる方が確実かつ低コスト。
 
+**検討中・未実装（2026-08-06・下妻市で発覚）**：現行のstory_p2は「評価Aの成果指標により、〜が適切に機能していることが確認されています」のように、outcome_evalの評価ラベルからAIが評価的な結論を作文する文体になっている。この文体には2つの問題がある。①「確認されています」という言い切りが、実際には市の自己評価ラベル1つを根拠にしているだけなのに、あたかも検証済みの事実であるかのように響く。②事業によって比率が自然に出せるもの（参加率46%等）と出せないもの（件数のみ）が混在するため、evalラベルから結論を作文するやり方は事業ごとに文体がバラバラになりやすい。改善案として、outcome_eval自体は文中で言及せず、代わりに元シートの「有効性→指標の実績」欄の右端にある説明文（市自身が書いた評価理由）を結びに使う統一テンプレート案が出ている：「{活動指標名}は{活動指標実績}、{成果指標名}は{成果指標実績}でした。{有効性の説明欄の文章}。」。ただしこれには2点の追加作業が必要：(1)抽出スクリプトに「有効性の説明」欄の抽出を追加すること、(2)この説明欄が全件で意味のある文章になっているか（空欄・紋切り型でないか）事前にサンプル確認すること。下妻市では時間の都合で見送り、次回以降の自治体で試すかどうかは利用者の判断に委ねる。
+
 ---
 
-## gen_story.py（現行コード・story_p2生成専用）
+## gen_story.py（現行コード・p1/p2共通・2026-08-06更新）
+
+**2026-08-06追加修正（下妻市で発覚・重要）**：旧コードはOAuth失効時に「該当行を空欄化して次へ進み続ける」設計だったため、失効後の残り全件が静かに空欄化されるまで気づけなかった（朝来市で実例）。以下の3点を追加し、失効を即座に検知して安全に停止するよう改善した：
+1. **逐次保存**：1行処理するたびにCSVへ書き戻す（`save()`を毎行呼ぶ）。途中で打ち切っても、それまでの生成分は失われない
+2. **認証エラーの即時検知**：`AuthenticationError`はレート制限と違い待たずに即座に失敗として扱う（OAuth失効の疑いを早期に表面化させる）
+3. **連続エラーでの早期停止**：3件連続でエラーが起きたら、空欄を量産し続ける前に処理を打ち切り、再実行を促すメッセージを出す（再実行すれば生成済み行はスキップされ、続きから再開できる）
+
+あわせて、p1/p2を1つのスクリプトに統合し（`--pass p1`/`--pass p2`で切り替え）、`--limit N --out FILE`で試作専用の別ファイル出力にも対応した。これにより「実行手順」節にあった手作業でのフィールド名置換（旧版）は不要になった。
 
 ```python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 gen_story.py
-seiro_master.csv の各行に story_p2 を AI 生成して書き戻す（第2パス）。
-Anthropic Python SDK を使用。
-"""
+master CSV の各行に story_p1 / story_p2 を AI 生成して書き戻す。
+Anthropic Python SDK を使用。2パス設計（p1→p2は別実行）。
 
-import csv, json, sys, time
+使い方:
+  python gen_story.py --pass p1 --limit 20 --out trial_p1.csv   # 試作（別ファイルに出力・master.csvは触らない）
+  python gen_story.py --pass p1                                  # 本番（master.csvに書き戻す）
+  python gen_story.py --pass p2 --limit 20 --out trial_p2.csv
+  python gen_story.py --pass p2
+"""
+import csv
+import json
+import sys
+import time
+import argparse
 from pathlib import Path
 
-# ===== 自治体ごとに変更する =====
-CSV_PATH   = r'master_data.csv'  # 自治体ごとの作業フォルダ内のマスターCSVへのパスに変更する
-MODEL      = 'claude-haiku-4-5-20251001'
-# ================================
+MASTER_CSV = 'master_data.csv'  # 自治体ごとの作業フォルダ内のマスターCSVへのパスに変更する
+MODEL = 'claude-haiku-4-5-20251001'
+
 
 def get_client():
     import anthropic, os
@@ -131,6 +150,7 @@ def get_client():
             return anthropic.Anthropic(auth_token=token)
     raise RuntimeError('認証情報が見つかりません。ANTHROPIC_API_KEY を設定してください。')
 
+
 def run_claude(client, prompt: str) -> dict:
     import anthropic as _ant
     for attempt in range(5):
@@ -142,7 +162,7 @@ def run_claude(client, prompt: str) -> dict:
             )
             text = msg.content[0].text.strip()
             start = text.find('{')
-            end   = text.rfind('}') + 1
+            end = text.rfind('}') + 1
             if start < 0 or end <= 0:
                 raise ValueError(f'JSON not found: {text[:200]}')
             return json.loads(text[start:end])
@@ -150,34 +170,35 @@ def run_claude(client, prompt: str) -> dict:
             wait = 60 * (attempt + 1)
             print(f'  [429] レート制限。{wait}秒待機中...', flush=True)
             time.sleep(wait)
-    raise RuntimeError('429 が繰り返し発生。中断します。')
+        except _ant.AuthenticationError as e:
+            print(f'  [401] 認証エラー。OAuthトークンが失効した可能性があるため、この試行では待たずに失敗として扱います。', flush=True)
+            raise
+    raise RuntimeError('リトライ上限に到達しました。中断します。')
 
-def main():
-    sys.stdout.reconfigure(encoding='utf-8')
-    client = get_client()
 
-    with open(CSV_PATH, encoding='utf-8-sig', newline='') as f:
-        reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames
-        rows = list(reader)
+def _is_empty(v):
+    return not v or v.strip() in ('', 'データなし', '成果指標なし')
 
-    def _is_empty(v):
-        return not v or v.strip() in ('', 'データなし', '成果指標なし')
 
-    total = len(rows)
-    for i, row in enumerate(rows):
-        if row.get('story_p2'):          # ← 第2パス：p2が空の行のみ生成
-            print(f'[skip] {i+1}/{total} {row["name"][:25]}')
-            continue
+def prompt_p1(row):
+    return f"""以下の自治体事業情報をもとに、住民が行政サービスの目的と内容を理解するための説明文をJSONで生成してください。JSONのみ出力し、前後の解説文は不要です。
 
-        # 活動指標・成果指標が両方とも空欄／データなしの場合は出力が一意に定まるため、
-        # API呼び出しをせず固定文言で埋める（2026-08-04・朝来市で発覚：AIがルールに従わず生成拒否するケースがあった）
-        if _is_empty(row.get('output_name', '')) and _is_empty(row.get('outcome_name', '')):
-            row['story_p2'] = '成果を測る指標が設定されていません。'
-            print(f'[fix]  {i+1}/{total} {row["name"][:25]} (両方空欄→固定文言・API不使用)')
-            continue
+事業名：{row['name']}
+事業概要：{row['overview']}
 
-        prompt = f"""以下の自治体事業情報をもとに、住民が成果を判断するための説明文をJSONで生成してください。JSONのみ出力し、前後の解説文は不要です。
+出力ルール：
+- story_p1：事業概要（overview）に書かれている内容のみを使い、目的と実施内容を1〜2文（40〜80字）に圧縮する。
+- 目的がoverviewに明記されている場合はそれを使う。明記されていない場合、無理に「〜のために」という目的節を作らず、実施内容の要約のみにする。
+- overviewに書かれていない目的・意義・背景を、一般常識や外部知識で補って書き足さない（存在しない情報の創作禁止）。
+- 「令和○年度」「令和N年度」「R○年度」のような年度表現は絶対に使わない。
+- 「市」「町」「区」などの自治体種別は文中に含めない。
+
+出力形式（このJSONのみ返す）：
+{{"story_p1": "..."}}"""
+
+
+def prompt_p2(row):
+    return f"""以下の自治体事業情報をもとに、住民が事業の成果を判断するための説明文をJSONで生成してください。JSONのみ出力し、前後の解説文は不要です。
 
 事業名：{row['name']}
 活動指標：{row['output_name']}　実績：{row['output_val']}
@@ -195,22 +216,75 @@ def main():
 出力形式（このJSONのみ返す）：
 {{"story_p2": "..."}}"""
 
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--pass', dest='which_pass', choices=['p1', 'p2'], required=True)
+    ap.add_argument('--limit', type=int, default=0, help='未生成行のうち先頭N件のみ処理（試作用）')
+    ap.add_argument('--out', default=None, help='出力先CSV（省略時はmaster_dataに書き戻す）')
+    args = ap.parse_args()
+
+    sys.stdout.reconfigure(encoding='utf-8')
+    client = get_client()
+
+    with open(MASTER_CSV, encoding='utf-8-sig', newline='') as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames
+        rows = list(reader)
+
+    field = 'story_p1' if args.which_pass == 'p1' else 'story_p2'
+    prompt_fn = prompt_p1 if args.which_pass == 'p1' else prompt_p2
+
+    out_path = args.out or MASTER_CSV
+
+    def save():
+        with open(out_path, 'w', encoding='utf-8-sig', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+
+    processed = 0
+    consecutive_errors = 0
+    total_targets = sum(1 for r in rows if not r.get(field))
+    print(f'対象: {total_targets}件（既生成済みはスキップ）', flush=True)
+
+    for i, row in enumerate(rows):
+        if row.get(field):
+            continue
+        if args.limit and processed >= args.limit:
+            break
+
+        # 活動指標・成果指標が両方とも空欄／データなしの場合は出力が一意に定まるため、
+        # API呼び出しをせず固定文言で埋める（2026-08-04・朝来市で発覚：AIがルールに従わず生成拒否するケースがあった）
+        if args.which_pass == 'p2' and _is_empty(row.get('output_name', '')) and _is_empty(row.get('outcome_name', '')):
+            row['story_p2'] = '成果を測る指標が設定されていません。'
+            processed += 1
+            consecutive_errors = 0
+            print(f'[fix]  {processed}/{total_targets if not args.limit else args.limit} {row["name"][:25]} (両方空欄→固定文言・API不使用)')
+            save()
+            continue
+
         try:
-            result = run_claude(client, prompt)
-            row['story_p2'] = result.get('story_p2', '').strip()
-            print(f'[OK]  {i+1}/{total} {row["name"][:25]}')
+            result = run_claude(client, prompt_fn(row))
+            row[field] = result.get(field, '').strip()
+            processed += 1
+            consecutive_errors = 0
+            print(f'[OK]  {processed}/{total_targets if not args.limit else args.limit} {row["name"][:25]}: {row[field]}')
+            save()
         except Exception as e:
-            row['story_p2'] = ''
-            print(f'[ERR] {i+1}/{total} {row["name"][:25]}: {e}', file=sys.stderr)
+            row[field] = ''
+            consecutive_errors += 1
+            print(f'[ERR] {row["name"][:25]}: {e}', file=sys.stderr)
+            save()
+            if consecutive_errors >= 3:
+                print('連続エラーが3件発生。OAuthトークン失効等の疑いがあるため中断します（再実行で続きから再開できます）。', file=sys.stderr)
+                break
 
         time.sleep(5)  # レート制限対策（OAuth トークン経由は制限が厳しいため長めに設定）
 
-    with open(CSV_PATH, 'w', encoding='utf-8-sig', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
+    save()
+    print(f'\n完了。{processed}件処理。{out_path} に書き込みました。')
 
-    print(f'\n完了。{CSV_PATH} に書き戻しました。')
 
 if __name__ == '__main__':
     main()
@@ -220,17 +294,20 @@ if __name__ == '__main__':
 
 ## 実行手順
 
-1. `CSV_PATH` を自治体に合わせて編集する
+1. `MASTER_CSV` を自治体に合わせて編集する
 2. master CSV に `story_p1` `story_p2` 列が存在することを確認（空でOK）
-3. 第1パス（story_p1 生成）：以下を全て変更してから実行する（単純なフィールド名の置換では済まない）
-   - スキップ条件：`row.get('story_p2')` → `row.get('story_p1')`
-   - プロンプト本文：「story_p2生成専用」の本文（`output_name`/`outcome_name`等を使う）を、上記「story_p1 プロンプトテンプレート」節の本文（`name`・`overview`のみを使う）に丸ごと差し替える
-   - 出力の書き込み先：`row['story_p2']` → `row['story_p1']`
-4. 第2パス（story_p2 生成）：デフォルト設定のまま実行
+3. まず試作（20件程度、別ファイル出力）：
    ```
-   python gen_story.py
+   python gen_story.py --pass p1 --limit 20 --out trial_p1.csv
+   python gen_story.py --pass p2 --limit 20 --out trial_p2.csv
    ```
-   300件を超える規模の自治体では、OAuthトークンの途中失効を避けるため`ANTHROPIC_API_KEY`環境変数の使用を推奨（上記「概要」節の注意参照）。
+   生成結果（全文）を人間に提示し、確認を得てから本番へ進む（上記「品質チェック」節・fixed_prompt.mdの人間確認原則を参照）。
+4. 本番（第1パス→第2パスの順で実行）：
+   ```
+   python gen_story.py --pass p1
+   python gen_story.py --pass p2
+   ```
+   300件を超える規模の自治体では、OAuthトークンの途中失効を避けるため`ANTHROPIC_API_KEY`環境変数の使用を推奨（上記「概要」節の注意参照）。OAuthのまま進める場合は、3件連続エラーで自動停止する設計になっているため、その都度再実行すれば続きから再開できる（下妻市では約30分・10分区切りでの再実行を目安にした）。
 5. エラー行は空のままなので、再実行すれば自動的に再生成される
 
 ---
@@ -241,6 +318,7 @@ if __name__ == '__main__':
 - [ ] overviewに書かれていない目的・意義・背景を一般常識で補っていないか（機械的にstory_p1の文字数がoverviewの文字数を超えていないか全件比較すると、補完の疑いがある行を効率的に検出できる。朝来市447件中1件で発見）
 - [ ] 「令和○年度」等の年度表現が含まれていないか（overview側に年度表現があると引き写されやすい）
 - [ ] 不自然な文や異常な長さ（10字以下・200字以上）がないか
+- [ ] **文字化け・意味不明な単語混入がないか**（2026-08-06追加・下妻市で発覚）：座標抽出時に隣接文字が混入すると「動物の虐tackle防止」「集落営vanjou等」のような文字化けが生じることがある。機械チェックでは正規表現で怪しい単語（英字が漢字・ひらがなの直後に唐突に現れるパターン等）を検出できるが、**SNS・ICT・AI・PDCA・NET119・LAN等の正規の略語を誤検知しやすい**ため、既知の正規略語は除外リストに加えてから判定すること。該当した行はstory_p1を空欄化して抽出バグを修正した上で再生成する
 
 **story_p2**
 - [ ] コスト・予算の記載が含まれていないか（含まれていれば手動削除）
