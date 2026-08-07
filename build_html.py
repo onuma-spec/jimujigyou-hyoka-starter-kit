@@ -76,6 +76,8 @@ with open(f"{BASE}\\03_パッチ済みデータ\\kitamoto_master_v2.csv", encodi
             'output_val3':   row.get('output_val3', '') or '',
             'output_name4':  row.get('output_name4', '') or '',
             'output_val4':   row.get('output_val4', '') or '',
+            'output_name5':  row.get('output_name5', '') or '',
+            'output_val5':   row.get('output_val5', '') or '',
             'outcome_name':  row.get('outcome_name', '') or '',
             'outcome_val':   row.get('outcome_val', '') or '',
             'outcome_name2': row.get('outcome_name2', '') or '',
@@ -84,6 +86,18 @@ with open(f"{BASE}\\03_パッチ済みデータ\\kitamoto_master_v2.csv", encodi
             'outcome_val3':  row.get('outcome_val3', '') or '',
             'outcome_name4': row.get('outcome_name4', '') or '',
             'outcome_val4':  row.get('outcome_val4', '') or '',
+            'outcome_name5': row.get('outcome_name5', '') or '',
+            'outcome_val5':  row.get('outcome_val5', '') or '',
+            'output_unit':   row.get('output_unit', '') or '',
+            'output_unit2':  row.get('output_unit2', '') or '',
+            'output_unit3':  row.get('output_unit3', '') or '',
+            'output_unit4':  row.get('output_unit4', '') or '',
+            'output_unit5':  row.get('output_unit5', '') or '',
+            'outcome_unit':  row.get('outcome_unit', '') or '',
+            'outcome_unit2': row.get('outcome_unit2', '') or '',
+            'outcome_unit3': row.get('outcome_unit3', '') or '',
+            'outcome_unit4': row.get('outcome_unit4', '') or '',
+            'outcome_unit5': row.get('outcome_unit5', '') or '',
             'story_impact': row['story_impact'] or '',
             'pdf_page':     int(row['pdf_page'] or 0),
             'cls':          row['cls'] or 'データなし',
@@ -463,11 +477,17 @@ function rootPlainHtml(root) {
 // ── 成果セクション：活動指標・成果指標の直接転記表示（B1、2026-08-06） ──────
 // AI生成（story_p2）をやめ、評価シートの指標名・実績値をそのまま転記する。
 function indicatorPairs(e, prefix) {
+  // 単位（{prefix}_unit{suf}列）があれば値の末尾に付加する。単位列を持たない自治体は
+  // e[...]がundefinedになりunit=''のまま従来通り表示される（段階的ロールアウト対応、2026-08-06）。
   const pairs = [];
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= 5; i++) {
     const suf = i === 1 ? '' : String(i);
     const name = e[`${prefix}_name${suf}`];
-    if (name && name !== 'データなし') pairs.push({name, val: e[`${prefix}_val${suf}`] || ''});
+    if (name && name !== 'データなし') {
+      const rawUnit = e[`${prefix}_unit${suf}`];
+      const unit = (rawUnit && rawUnit !== '-') ? rawUnit : '';
+      pairs.push({name, val: e[`${prefix}_val${suf}`] || '', unit});
+    }
   }
   return pairs;
 }
@@ -480,7 +500,7 @@ function outcomeSectionHtml(e) {
   const outcomePairs = indicatorPairs(e, 'outcome');
   const block = (label, pairs) => {
     const body = pairs.length
-      ? pairs.map(p => `<div class="ind-row"><span class="ind-name">${esc(p.name)}</span><span class="ind-val">${p.val ? esc(p.val) : 'データなし'}</span></div>`).join('')
+      ? pairs.map(p => `<div class="ind-row"><span class="ind-name">${esc(p.name)}</span><span class="ind-val">${p.val ? esc(p.val) + esc(p.unit) : 'データなし'}</span></div>`).join('')
       : `<div class="ind-row"><span class="ind-val">データなし</span></div>`;
     return `<div class="ind-block"><div class="ind-label">${label}</div>${body}</div>`;
   };
@@ -490,7 +510,7 @@ function outcomeSectionText(e) {
   const outputPairs = indicatorPairs(e, 'output');
   const outcomePairs = indicatorPairs(e, 'outcome');
   const fmt = (label, pairs) => pairs.length
-    ? `${label}: ` + pairs.map(p => `${p.name}＝${p.val || 'データなし'}`).join('／')
+    ? `${label}: ` + pairs.map(p => `${p.name}＝${p.val ? p.val + p.unit : 'データなし'}`).join('／')
     : `${label}: データなし`;
   return [fmt('活動指標', outputPairs), fmt('成果指標', outcomePairs)].join('　');
 }

@@ -5,6 +5,8 @@ pdfminerのextract_text()の文字列順序が信頼できないPDF（複雑な�
 LTFigure内にLTCharがフラットに並ぶ構造等）向けの、LTChar座標ベース抽出の共通関数群。
 ファイル末尾に、pymupdf(fitz)を使う自治体向けの数値グリッド抽出関数も追加済み
 （湖西市, 2026-07-02。get_text("dict")の座標ベース、pdfminerのLTCharとは別実装）。
+さらに末尾に、読み取り順序の復元（get_lines_pymupdf_sorted）・指標名の複数行
+結合（merge_wrapped_name）の2関数を追加済み（湖西市, 2026-08-07）。
 
 富田林市（07_事務事業評価）の抽出で開発した2つの技法をまとめたもの：
 
@@ -220,6 +222,121 @@ def get_page_spans_pymupdf(page):
                 if t:
                     spans.append({'text': t, 'x0': s['bbox'][0], 'y0': s['bbox'][1]})
     return spans
+
+
+# ============================================================================
+# pymupdf（fitz）版：読み取り順序の復元（湖西市, 2026-08-07で発見・追加）
+#
+# page.get_text("text")（の.splitlines()）はPDFの内部描画順（ストリーム順）で
+# テキストを返すため、セル結合された帳票行（1項目が複数行分の高さを持つセルで
+# 描画される等）では、視覚的な位置と無関係な場所にテキストが出現することがある
+# （湖西市の実例：ある事業の活動内容を示す3行が、同じページのCheck欄の途中に
+# 出現していた）。対策はシンプルで、全スパンを(y, x)でソートし直すだけでよい
+# ——複雑な列判定ロジック（extract_by_label_column等）が必要な場面とは異なり、
+# 単純な「読み取り順序の並べ替え」だけで直る帳票崩れには、まずこちらを試すこと。
+# ============================================================================
+
+def get_lines_pymupdf_sorted(page, y_tol=1.0):
+    """page.get_text("text").splitlines()の代替。全スパンを(round(y0, 1), x0)で
+    ソートしてから返すため、セル結合等でストリーム順が視覚順と食い違う帳票でも
+    正しい読み取り順序でテキスト行のリストを得られる。
+
+    y_tol: 同一スパンをy方向でグルーピングする際の丸め桁（round(y0, 1)相当）。
+           通常は変更不要。
+
+    使い方の目安：まず対象PDFで通常のget_text("text")の出力とこの関数の出力を
+    見比べ、ラベル・値の並びが視覚的な位置（実物PDF画像）と一致するかを確認する
+    こと。多くの帳票では両者は一致する（この関数が必要になるのは、セル結合等
+    レイアウトが複雑な一部の帳票のみ）。
+    """
+    spans = get_page_spans_pymupdf(page)
+    spans.sort(key=lambda s: (round(s['y0'], 1), s['x0']))
+    return [s['text'] for s in spans]
+
+
+# ============================================================================
+# テキスト行方式：指標名の複数行結合（湖西市, 2026-08-07で開発）
+#
+# 指標名がテキスト行として1行ずつ取れる帳票（座標抽出まではしていない、
+# get_text("text")の素朴な行リストで足りるケース）で、名前が2行に折り返る
+# ことがある場合の結合ロジック。以前に「単位の位置から逆算して2行目かどうかを
+# 判定する」方式を試みて、複数指標が同一ページに混在するケースで誤結合する
+# （別指標の名前まで連結してしまう）という失敗をしたため、逆に「名前候補の側が
+# 完結した形になっているか」を先に判定する方式に変更したところ安定した。
+# ============================================================================
+import re as _re2
+
+_YEAR_PAT1_DEFAULT = _re2.compile(r'^Ｒ?R?\d年度$')
+_YEAR_PAT2_DEFAULT = _re2.compile(r'^\(?\d{4}年度\)?$')
+_DASH_PAT_DEFAULT = _re2.compile(r'^[-－ー―‐]+$')
+_NUM_PAT_LINE_DEFAULT = _re2.compile(r'^[\d,]+(\.\d+)?$')
+# 名前がこの語尾で終わっていれば「完結した指標名」とみなす。自治体の用語に応じて
+# 呼び出し側で拡張・上書きしてよい（湖西市での実例に基づくデフォルト値）。
+DEFAULT_TERMINAL_SUFFIX = (
+    '数', '率', '額', '割合', '量', '件', '人', '日', '回', '世帯', '箇所', '時間', '台', 'なし',
+    '人数', '日数', '件数', '冊数', '部数', '戸', '店', '校', '施設',
+)
+
+
+def merge_wrapped_name(lines, start_idx, terminal_suffix=DEFAULT_TERMINAL_SUFFIX,
+                        max_merges=3, header_tokens=frozenset()):
+    """lines[start_idx]を名前の1行目として、以降の行を「完結しているか」を
+    見ながら結合する（最大max_merges行まで）。戻り値は (結合後の名前, 単位, 次に
+    読み進めるべきindex)。
+
+    判定ルール（同一ページに複数指標が併記される帳票での誤結合を防ぐため、
+    「名前が完結しているか」を毎回チェックしてから次の行を取り込むかどうかを
+    決める）：
+      - 名前が terminal_suffix のいずれかで終わる、または閉じ括弧（）/)で
+        終わっていれば「完結」とみなし、それ以降の行は結合しない
+      - ただし次の候補行が丸括弧で完全に囲まれた注記（例:「（除く）」）の場合は、
+        完結済みの名前であっても注記として結合する
+      - 候補行が「短い（6字以内）」かつ数字ではなく、次の行が数値であれば、
+        それは名前の続きではなく単位とみなして結合を止める（unit に格納）
+      - 候補行が年度ラベル（R6年度／(2024年度)等）に一致する場合は無条件に
+        結合を止める
+      - 開始行が「-」等のダッシュのみの場合は「指標そのものが未設定」とみなし
+        結合しない
+
+    header_tokens: 上記の年度ラベル判定に加えて、無条件に結合を止めたい
+                   固定文字列があれば渡す（自治体ごとのラベル文言）。
+    """
+    def is_bracketed(s):
+        return s.startswith(('（', '(')) and s.endswith(('）', ')')) and len(s) >= 2
+
+    def is_complete(name):
+        return name.endswith(('）', ')')) or name.endswith(terminal_suffix)
+
+    def is_header_like(s):
+        return s in header_tokens or _YEAR_PAT1_DEFAULT.match(s) or _YEAR_PAT2_DEFAULT.match(s)
+
+    name = lines[start_idx]
+    j = start_idx + 1
+    unit = ''
+    merges = 0
+    if _DASH_PAT_DEFAULT.match(name):
+        return name, unit, j
+    while j < len(lines) and merges < max_merges:
+        cand = lines[j]
+        nxt = lines[j + 1] if j + 1 < len(lines) else None
+        cand_is_unit = (
+            len(cand) <= 6 and not is_bracketed(cand)
+            and not _NUM_PAT_LINE_DEFAULT.match(cand)
+            and nxt is not None and _NUM_PAT_LINE_DEFAULT.match(nxt)
+        )
+        if cand_is_unit:
+            unit = cand
+            j += 1
+            break
+        if is_header_like(cand):
+            break
+        if is_bracketed(cand) or not is_complete(name):
+            name += cand
+            j += 1
+            merges += 1
+            continue
+        break
+    return name, unit, j
 
 
 def extract_grid_value_pymupdf(spans, header_text, num_pat=None,
