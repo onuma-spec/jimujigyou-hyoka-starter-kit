@@ -365,11 +365,11 @@ const EVENTS = """ + DATA_JSON + r""";
 const LABELS = """ + LABELS_JSON + r""";
 const LS_KEY = LABELS.local_storage_key;
 const OLD_LS_KEY = 'kitamoto6_ratings'; // 旧v2版の保存キー（リニューアル案内の判定用）
-const SUPABASE_URL = 'https://unkhamvtfathmoxmikmp.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_UArsQ1bcdira6J91O8kXjA_nGJ6MGtz';
-const MUNICIPALITY_ID = 'kitamoto_r6'; // v2と同一ID（本番昇格・投票履歴を引き継ぐため）
+// 投票バックエンド：GAS+Sheets（2026-09-16改訂・新規自治体のデフォルト）
+// Supabaseを選んだ場合はfixed_prompt.md「投票バックエンドの選択」節の代替コードに差し替える
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw9GZI7D2OkO3CRckjnTsQZEn5W7uFYmO61XRcW_NrVoa30EymIoxycN-y4SY-Ow9GL/exec';
+const MUNICIPALITY_ID = 'kitamoto_r6'; // ← 自治体ごとに必ず変更する唯一の値
 const SUBMITTED_KEY = MUNICIPALITY_ID + '_submitted';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const ROOT_ORDER = ['法定義務あり','法定義務なし','判断できない','データなし'];
 const EV_PRIORITY = ['拡大','現状継続','改善（手段変更）','縮小','廃止方向','完了']; // ドリルダウンのグループ表示順（歳出削減につなげるため拡大→縮小→廃止の順）
@@ -1018,9 +1018,18 @@ async function submitToSupabase() {
   if (!rows.length) { alert('新しく評価した事業がありません。'); return; }
   const btn = document.getElementById('submit-btn');
   if (btn) { btn.disabled = true; btn.textContent = '送信中...'; }
-  const { error } = await sb.from('ratings').insert(rows);
-  if (error) {
-    alert('送信エラー: ' + error.message);
+  try {
+    // GAS Web AppはPOSTを302リダイレクトでGETに変換してしまう既知の制約があるため、
+    // 書き込みもGETのクエリパラメータ(action=insert)で行う。
+    const pairs = rows.map(r => [r.event_no, r.rating]);
+    const url = GAS_URL + '?action=insert'
+      + '&municipality_id=' + encodeURIComponent(MUNICIPALITY_ID)
+      + '&rows=' + encodeURIComponent(JSON.stringify(pairs));
+    const res = await fetch(url);
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || '送信に失敗しました');
+  } catch (err) {
+    alert('送信エラー: ' + err.message);
     if (btn) { btn.disabled = false; btn.textContent = '📤 投票する'; }
     return;
   }
@@ -1033,18 +1042,17 @@ async function submitToSupabase() {
 
 async function loadPeopleData() {
   if (LABELS.enable_voting === false) return;
-  const { data, error } = await sb
-    .from('ratings').select('event_no,rating').eq('municipality_id', MUNICIPALITY_ID);
-  if (error) {
+  let agg;
+  try {
+    const res = await fetch(GAS_URL + '?action=agg&municipality_id=' + encodeURIComponent(MUNICIPALITY_ID));
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || '取得に失敗しました');
+    agg = json.agg;
+  } catch (err) {
     const section = document.getElementById('vote-section');
     if (section) section.innerHTML = '<p style="color:#ef4444;font-size:.85rem">データの取得に失敗しました。</p>';
     return;
   }
-  const agg = {};
-  (data || []).forEach(row => {
-    if (!agg[row.event_no]) agg[row.event_no] = {'続行':0,'廃止':0,'見直し':0};
-    if (agg[row.event_no][row.rating] !== undefined) agg[row.event_no][row.rating]++;
-  });
   peopleAgg = agg;
   // サマリー画面は投票セクションだけ差し替え（renderSummary経由だとloadPeopleDataを再度呼び無限ループになるため）。
   // それ以外（マップ・ドリルダウン等）は画面全体を再描画し、ドリルダウンの「みんなの評価」列に反映する。
@@ -1138,10 +1146,16 @@ function downloadAllEventsCsv() {
 
 // 透明性確保のための生データ出力：Supabaseに蓄積された全投票ログをそのまま書き出す（現在の絞り込みの影響を受けない）
 async function downloadPeopleCsv() {
-  const { data, error } = await sb
-    .from('ratings').select('id,municipality_id,event_no,rating,submitted_at')
-    .eq('municipality_id', MUNICIPALITY_ID).order('submitted_at');
-  if (error) { alert('取得エラー: ' + error.message); return; }
+  let data;
+  try {
+    const res = await fetch(GAS_URL + '?action=raw&municipality_id=' + encodeURIComponent(MUNICIPALITY_ID));
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || '取得に失敗しました');
+    data = json.rows;
+  } catch (err) {
+    alert('取得エラー: ' + err.message);
+    return;
+  }
   const header = ['id', 'municipality_id', 'event_no', 'rating', 'submitted_at'];
   const csvRows = (data || []).map(r => header.map(k => '"' + String(r[k]).replace(/"/g, '""') + '"').join(','));
   const csv = '﻿' + [header.join(','), ...csvRows].join('\n');
@@ -1240,7 +1254,6 @@ HTML = f"""<!DOCTYPE html>
 </head>
 <body>
 <div id="app"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 {JS}
 </script>
