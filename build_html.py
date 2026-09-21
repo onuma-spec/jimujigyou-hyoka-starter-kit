@@ -1261,7 +1261,8 @@ function voteRows() {
     const mine = ratings[e.no] || '';
     const agg = peopleAgg[e.no];
     const hasVotes = !!agg && (agg['続行'] + agg['廃止'] + agg['見直し'] > 0);
-    if (!mine && !hasVotes) return false;
+    const hasMemo = !!(memos[e.no] && memos[e.no].trim());
+    if (!mine && !hasVotes && !hasMemo) return false;
     if (voteFilter === '') return true;
     if (voteFilter === '未評価') return !mine && hasVotes;
     return mine === voteFilter;
@@ -1270,6 +1271,10 @@ function voteRows() {
 
 function myRatingCellHtml(r) {
   return r ? `<span class="tag tev-${esc(r)}">${esc(r)}</span>` : '<span style="color:#9ca3af">未評価</span>';
+}
+function myMemoCellHtml(no) {
+  const m = memos[no];
+  return m ? `<span title="${esc(m)}">📝 ${esc(m.length > 20 ? m.slice(0, 20) + '…' : m)}</span>` : '<span style="color:#9ca3af">-</span>';
 }
 function voteCellHtml(agg) {
   const c = agg || {'続行':0,'廃止':0,'見直し':0};
@@ -1288,10 +1293,10 @@ function classifyStackHtml(e) {
   return `<div class="vtag-stack">${rootTagHtml(e.root)}${ptypeTagHtml(e.ptype)}${evTagHtml(e.ev)}</div>`;
 }
 function voteCsvText(rows) {
-  const header = ['事業番号','事務事業名','施策',LABELS.dept,'金額','法定義務','提供形態','行政評価','自分の評価','続行票','廃止票','見直し票'];
+  const header = ['事業番号','事務事業名','施策',LABELS.dept,'金額','法定義務','提供形態','行政評価','自分の評価','自分のメモ','続行票','廃止票','見直し票'];
   const csvRows = rows.map(e => {
     const c = peopleAgg[e.no] || {'続行':0,'廃止':0,'見直し':0};
-    return [e.no, e.name, e.cls, e.dept, e.budget, e.root, PTYPE_LABEL[e.ptype] || e.ptype, e.ev, ratings[e.no] || '', c['続行'], c['廃止'], c['見直し']];
+    return [e.no, e.name, e.cls, e.dept, e.budget, e.root, PTYPE_LABEL[e.ptype] || e.ptype, e.ev, ratings[e.no] || '', memos[e.no] || '', c['続行'], c['廃止'], c['見直し']];
   });
   return '﻿' + [header, ...csvRows].map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
 }
@@ -1387,6 +1392,7 @@ function renderVoteSection() {
       <td>${fmt(e.budget)}千円</td>
       <td>${classifyStackHtml(e)}</td>
       <td>${myRatingCellHtml(ratings[e.no])}</td>
+      <td>${myMemoCellHtml(e.no)}</td>
       <td>${voteCellHtml(peopleAgg[e.no])}</td>
     </tr>`).join('');
 
@@ -1401,6 +1407,7 @@ function renderVoteSection() {
       <td>${ptypeTagHtml(e.ptype)}</td>
       <td>${evTagShortHtml(e.ev)}</td>
       <td>${myRatingCellHtml(ratings[e.no])}</td>
+      <td>${esc(memos[e.no] || '')}</td>
       <td>${voteCellHtml(peopleAgg[e.no])}</td>
     </tr>`).join('');
 
@@ -1420,13 +1427,13 @@ function renderVoteSection() {
     </div>
     <p style="font-size:.78rem;color:#6b7280;margin-bottom:10px">自分が評価した事務事業、または誰かが投票済みの事務事業を対象に表示しています。上部のボタンを使うと、自分の評価によって表示する事務事業を絞り込めます。</p>
     <div class="votetbl-wrap"><table class="votetbl">
-      <thead><tr><th>事務事業名</th><th>施策／担当課</th><th>金額</th><th>分類</th><th>自分の評価</th><th>みんなの評価</th></tr></thead>
+      <thead><tr><th>事務事業名</th><th>施策／担当課</th><th>金額</th><th>分類</th><th>自分の評価</th><th>自分のメモ</th><th>みんなの評価</th></tr></thead>
       <tbody>${compactRows}</tbody>
     </table></div>
     <div class="votetbl-print"><table class="evtbl">
       <thead><tr>
         <th>${esc(LABELS.no_col)}</th><th>事務事業名</th><th>施策</th><th>${esc(LABELS.dept)}</th><th>金額</th>
-        <th>法定義務</th><th>提供形態</th><th>行政評価</th><th>自分の評価</th><th>みんなの評価</th>
+        <th>法定義務</th><th>提供形態</th><th>行政評価</th><th>自分の評価</th><th>自分のメモ</th><th>みんなの評価</th>
       </tr></thead>
       <tbody>${printRows}</tbody>
     </table></div>`;
