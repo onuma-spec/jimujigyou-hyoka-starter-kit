@@ -15,7 +15,7 @@ story_p1/p2・タグ・予算等）には一切触れずに表示だけを何度
 対象キー（安全のため、この6つ以外は変更できない）：
 show_emeta, show_tags, show_desc, show_budget, show_outcome, show_impact
 
-※ enable_voting（投票機能／Supabase連携のオンオフ）は意図的に対象外。show_*が「カードの
+※ enable_voting（投票機能／GAS連携のオンオフ）は意図的に対象外。show_*が「カードの
 どのセクションを見せるか」という同種の設定なのに対し、enable_voting は複数の関数
 （submitToSupabase・loadPeopleData・renderVoteSection等）に分散した機能全体のオンオフであり、
 ビルドによってはJS側の対応が一部漏れていることがある（2026-08-05・朝来市の試作ビルドで実際に
